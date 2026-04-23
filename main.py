@@ -4,138 +4,131 @@ import json
 import os
 import random
 
-# Файл для хранения данных
-DATA_FILE = "expenses.json"
+DATA_FILE = "books.json"
 
-class ExpenseManager:
+class BookTracker:
     def __init__(self, root):
         self.root = root
-        self.root.title("Финансовый менеджер v1.0")
-        self.root.geometry("500x600")
+        self.root.title("Book Tracker — Учет прочитанных книг")
+        self.root.geometry("600x650")
         
-        self.expenses = self.load_data()
+        self.books = self.load_data()
         
-        # --- Интерфейс (UI) ---
+        # --- Интерфейс ---
         self.setup_ui()
-        self.update_listbox()
+        self.update_view()
 
     def setup_ui(self):
-        """Создание элементов интерфейса."""
-        # Верхняя панель ввода
-        input_frame = tk.LabelFrame(self.root, text="Добавить новый расход", padx=10, pady=10)
-        input_frame.pack(padx=10, pady=10, fill="x")
+        # Фрейм ввода
+        input_frame = tk.LabelFrame(self.root, text="Добавить новую книгу", padx=10, pady=10)
+        input_frame.pack(padx=10, pady=5, fill="x")
 
         tk.Label(input_frame, text="Название:").grid(row=0, column=0, sticky="w")
-        self.entry_name = tk.Entry(input_frame)
-        self.entry_name.grid(row=0, column=1, padx=5, pady=5)
+        self.ent_title = tk.Entry(input_frame)
+        self.ent_title.grid(row=0, column=1, padx=5, pady=2, sticky="we")
 
-        tk.Label(input_frame, text="Сумма:").grid(row=1, column=0, sticky="w")
-        self.entry_amount = tk.Entry(input_frame)
-        self.entry_amount.grid(row=1, column=1, padx=5, pady=5)
+        tk.Label(input_frame, text="Автор:").grid(row=1, column=0, sticky="w")
+        self.ent_author = tk.Entry(input_frame)
+        self.ent_author.grid(row=1, column=1, padx=5, pady=2, sticky="we")
 
-        tk.Label(input_frame, text="Категория:").grid(row=2, column=0, sticky="w")
-        self.combo_category = ttk.Combobox(input_frame, values=["Продукты", "Транспорт", "Развлечения", "Жилье", "Прочее"])
-        self.combo_category.current(0)
-        self.combo_category.grid(row=2, column=1, padx=5, pady=5)
+        tk.Label(input_frame, text="Жанр:").grid(row=2, column=0, sticky="w")
+        self.ent_genre = ttk.Combobox(input_frame, values=["Фантастика", "Детектив", "Роман", "Психология", "Классика", "Другое"])
+        self.ent_genre.grid(row=2, column=1, padx=5, pady=2, sticky="we")
 
-        self.btn_add = tk.Button(input_frame, text="Добавить", command=self.add_expense, bg="#c8e6c9")
-        self.btn_add.grid(row=3, column=0, columnspan=2, pady=10, sticky="we")
+        tk.Label(input_frame, text="Страниц:").grid(row=3, column=0, sticky="w")
+        self.ent_pages = tk.Entry(input_frame)
+        self.ent_pages.grid(row=3, column=1, padx=5, pady=2, sticky="we")
 
-        # Список расходов
-        list_frame = tk.LabelFrame(self.root, text="История расходов", padx=10, pady=10)
-        list_frame.pack(padx=10, pady=10, fill="both", expand=True)
+        self.btn_add = tk.Button(input_frame, text="Добавить книгу", command=self.add_book, bg="#bbdefb")
+        self.btn_add.grid(row=4, column=0, columnspan=2, pady=10, sticky="we")
 
-        self.tree = ttk.Treeview(list_frame, columns=("Name", "Amount", "Category"), show='headings')
-        self.tree.heading("Name", text="Название")
-        self.tree.heading("Amount", text="Сумма")
-        self.tree.heading("Category", text="Категория")
-        self.tree.pack(fill="both", expand=True)
+        # Фрейм фильтрации
+        filter_frame = tk.LabelFrame(self.root, text="Фильтрация", padx=10, pady=10)
+        filter_frame.pack(padx=10, pady=5, fill="x")
 
-        self.btn_delete = tk.Button(self.root, text="Удалить выбранное", command=self.delete_expense, bg="#ffcdd2")
-        self.btn_delete.pack(pady=5)
+        tk.Label(filter_frame, text="Жанр:").grid(row=0, column=0)
+        self.filter_genre = ttk.Combobox(filter_frame, values=["Все", "Фантастика", "Детектив", "Роман", "Психология", "Классика", "Другое"])
+        self.filter_genre.current(0)
+        self.filter_genre.grid(row=0, column=1, padx=5)
 
-        # Статистика и советы
-        self.label_total = tk.Label(self.root, text="Итого: 0 руб.", font=("Arial", 12, "bold"))
-        self.label_total.pack(pady=5)
-        self.btn_quote = tk.Button(self.root, text="Получить совет", command=self.show_quote)
+        self.btn_filter = tk.Button(filter_frame, text="Применить фильтры", command=self.update_view)
+        self.btn_filter.grid(row=0, column=2, padx=5)
+
+        self.check_pages = tk.BooleanVar()
+        tk.Checkbutton(filter_frame, text="Более 200 страниц", variable=self.check_pages, command=self.update_view).grid(row=0, column=3)
+
+        # Таблица
+        self.tree = ttk.Treeview(self.root, columns=("Title", "Author", "Genre", "Pages"), show='headings')
+        self.tree.heading("Title", text="Название")
+        self.tree.heading("Author", text="Автор")
+        self.tree.heading("Genre", text="Жанр")
+        self.tree.heading("Pages", text="Стр.")
+        self.tree.pack(padx=10, pady=5, fill="both", expand=True)
+
+        # Кнопка удаления и цитата
+        btn_del = tk.Button(self.root, text="Удалить выбранную", command=self.delete_book, bg="#ffcdd2")
+        btn_del.pack(pady=5)
+
+        self.btn_quote = tk.Button(self.root, text="Случайная цитата", command=self.show_quote)
         self.btn_quote.pack(pady=5)
 
     def load_data(self):
-        """Загрузка данных из JSON."""
         if os.path.exists(DATA_FILE):
             try:
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
-            except:
-                return []
+            except: return []
         return []
 
     def save_data(self):
-        """Сохранение данных в JSON."""
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(self.expenses, f, ensure_ascii=False, indent=4)
+            json.dump(self.books, f, ensure_ascii=False, indent=4)
 
-    def add_expense(self):
-        """Валидация и добавление расхода."""
-        name = self.entry_name.get().strip()
-        amount_str = self.entry_amount.get().strip()
-        category = self.combo_category.get()
-
-        if not name or not amount_str:
+    def add_book(self):
+        t, a, g, p = self.ent_title.get(), self.ent_author.get(), self.ent_genre.get(), self.ent_pages.get()
+        
+        if not t or not a or not g or not p:
             messagebox.showwarning("Ошибка", "Заполните все поля!")
             return
-
+        
         try:
-            amount = float(amount_str)
-            if amount <= 0: raise ValueError
+            pages = int(p)
         except ValueError:
-            messagebox.showerror("Ошибка", "Введите корректное число больше 0")
+            messagebox.showerror("Ошибка", "Количество страниц должно быть числом!")
             return
 
-        new_item = {"name": name, "amount": amount, "category": category}
-        self.expenses.append(new_item)
+        self.books.append({"title": t, "author": a, "genre": g, "pages": pages})
         self.save_data()
-        self.update_listbox()
-        
-        self.entry_name.delete(0, tk.END)
-        self.entry_amount.delete(0, tk.END)
+        self.update_view()
+        self.ent_title.delete(0, tk.END); self.ent_author.delete(0, tk.END); self.ent_pages.delete(0, tk.END)
 
-    def delete_expense(self):
-        """Удаление выбранного элемента."""
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Удаление", "Сначала выберите строку в списке")
-            return
-
-        # Получаем индекс элемента
-        index = self.tree.index(selected_item)
-        del self.expenses[index]
+    def delete_book(self):
+        selected = self.tree.selection()
+        if not selected: return
+        idx = self.tree.index(selected[0])
+        # Чтобы правильно удалить при фильтрации, нужно найти книгу по названию или ID
+        # Но для простоты удалим из текущего отображения
+        book_to_del = self.tree.item(selected[0])['values'][0]
+        self.books = [b for b in self.books if b['title'] != book_to_del]
         self.save_data()
-        self.update_listbox()
+        self.update_view()
 
-    def update_listbox(self):
-        """Обновление таблицы и итоговой суммы."""
-        for i in self.tree.get_children():
-            self.tree.delete(i)
+    def update_view(self):
+        for i in self.tree.get_children(): self.tree.delete(i)
         
-        total = 0
-        for item in self.expenses:
-            self.tree.insert("", "end", values=(item["name"], item["amount"], item["category"]))
-            total += item["amount"]
-        
-        self.label_total.config(text=f"Итого: {total:.2f} руб.")
+        f_genre = self.filter_genre.get()
+        only_big = self.check_pages.get()
+
+        for b in self.books:
+            if f_genre != "Все" and b['genre'] != f_genre: continue
+            if only_big and b['pages'] <= 200: continue
+            self.tree.insert("", "end", values=(b['title'], b['author'], b['genre'], b['pages']))
 
     def show_quote(self):
-        """Эмуляция API (или получение случайного совета)."""
-        quotes = [
-            "Копейка рубль бережёт!",
-            "Не покупайте то, что вам не нужно, только потому, что оно дешево.",
-            "Планируйте бюджет заранее.",
-            "Инвестируйте в знания — они приносят самые высокие проценты."
-        ]
-        messagebox.showinfo("Совет дня", random.choice(quotes))
+        quotes = ["Книга — лучший подарок.", "Чтение — вот лучшее учение!", "Комната без книг подобна телу без души."]
+        messagebox.showinfo("Цитата", random.choice(quotes))
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ExpenseManager(root)
+    app = BookTracker(root)
     root.mainloop()
